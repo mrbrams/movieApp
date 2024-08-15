@@ -1,0 +1,13 @@
+features:
+
+User registration
+User login
+JWT token generation
+Create movies
+View movies
+Update movies
+Delete movies
+Rate movies
+Comment on movies
+
+Movie - id, title, description, cast, release_date, duration,genre, rating, director, language,
