@@ -1,15 +1,25 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+# from fastapi import FastAPI, Depends, HTTPException, status
+# from sqlalchemy.orm import Session
+# from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 
-from . import models, schemas, crud, auth, database
-from .database import engine, SessionLocal
+# import models, schemas, crud, auth, database
+# from database import engine, SessionLocal
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from auth import get_password_hash, verify_password, create_access_token, authenticate_user, verify_access_token, get_current_user, get_current_active_user
+import crud as crud, schemas as schemas, models as models
+from database import engine, Base, get_db
+from auth import pwd_context
+from typing import Optional
 from logger import get_logger
 
 logger = get_logger(__name__)
 
+
 # Create all database tables
-models.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 # Initialize the FastAPI app
 app = FastAPI()
@@ -70,7 +80,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 # Endpoint to get current logged-in user
 @app.get("/users/me/", response_model=schemas.User)
-def read_users_me(current_user: schemas.User = Depends(auth.get_current_active_user)):
+def read_users_me(current_user: schemas.User = Depends(get_current_active_user)):
     return current_user
 
 # Endpoint to obtain a token
@@ -88,7 +98,7 @@ def login_for_access_token(db: Session = Depends(get_db), form_data: OAuth2Passw
 
 # Endpoint to create a movie
 @app.post("/movies/", response_model=schemas.Movie)
-def create_movie(movie: schemas.MovieCreate, db: Session = Depends(get_db), current_user: schemas.User = Depends(auth.get_current_active_user)):
+def create_movie(movie: schemas.MovieCreate, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_active_user)):
     return crud.create_movie(db=db, movie=movie)
 
 # Endpoint to get a list of movies
@@ -111,7 +121,7 @@ def read_movie(movie_id: int, db: Session = Depends(get_db)):
 #     return crud.update_movie(db=db, movie_id=movie_id, movie=movie)
 
 @app.put("/movies/{movie_id}", response_model=schemas.Movie)
-def update_movie(movie_id: int, movie: schemas.MovieCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+def update_movie(movie_id: int, movie: schemas.MovieCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_movie = crud.get_movie_by_id(db, movie_id=movie_id)
     if db_movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
@@ -123,12 +133,12 @@ def update_movie(movie_id: int, movie: schemas.MovieCreate, db: Session = Depend
 
 # Endpoint to delete a movie
 @app.delete("/movies/{movie_id}", response_model=schemas.Movie)
-def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: schemas.User = Depends(auth.get_current_active_user)):
+def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_active_user)):
     return crud.delete_movie(db=db, movie_id=movie_id)
 
 #Endpoint to delete a movie only by a user who listed it
 @app.delete("/movies/{movie_id}", response_model=schemas.Movie)
-def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_movie = crud.get_movie_by_id(db, movie_id=movie_id)
     if db_movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
@@ -145,7 +155,7 @@ def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: mod
 
 #Endpoint to rate a movie
 @app.post("/movies/{movie_id}/rate", response_model=schemas.Rating)
-def rate_movie(movie_id: int, rating: schemas.RatingCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+def rate_movie(movie_id: int, rating: schemas.RatingCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_movie = crud.get_movie_by_id(db, movie_id=movie_id)
     if db_movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
@@ -164,7 +174,7 @@ def get_ratings(movie_id: int, db: Session = Depends(get_db)):
 
 # Endpoint to add a comment to a movie
 @app.post("/movies/{movie_id}/comments", response_model=schemas.Comment)
-def add_comment(movie_id: int, comment: schemas.CommentCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+def add_comment(movie_id: int, comment: schemas.CommentCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_movie = crud.get_movie_by_id(db, movie_id=movie_id)
     if db_movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
@@ -183,7 +193,7 @@ def get_comments(movie_id: int, db: Session = Depends(get_db)):
 
 # Endpoint to add comment to a comment (nested comment)
 @app.post("/comments/{comment_id}/reply", response_model=schemas.Comment)
-def add_nested_comment(comment_id: int, comment: schemas.CommentCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+def add_nested_comment(comment_id: int, comment: schemas.CommentCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_comment = crud.get_comment_by_id(db, comment_id=comment_id)
     if db_comment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from database import SessionLocal, get_db
 
-from . import models, schemas, database
+import models, schemas, database
 
 load_dotenv()
 
