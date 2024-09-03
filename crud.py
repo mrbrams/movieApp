@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import models, schemas
+from fastapi import FastAPI, HTTPException, Depends
 
 # Genre CRUD Operations
 
@@ -67,7 +68,7 @@ def delete_director(db: Session, director_id: int):
 
 # Movie CRUD Operations
 
-def create_movie(db: Session, movie: schemas.MovieCreate) -> models.Movie:
+def create_movie(db: Session, movie: schemas.MovieCreate, user_id: int) -> models.Movie:
     db_movie = models.Movie(
         title=movie.title,
         description=movie.description,
@@ -75,7 +76,6 @@ def create_movie(db: Session, movie: schemas.MovieCreate) -> models.Movie:
         duration=movie.duration,
         rating=movie.rating,
         language=movie.language,
-        poster_url=movie.poster_url,
         trailer_url=movie.trailer_url,
         genre_id=movie.genre_ids[0] if movie.genre_ids else None,
         director_id=movie.director_id
@@ -83,12 +83,16 @@ def create_movie(db: Session, movie: schemas.MovieCreate) -> models.Movie:
     
     # Add actors to the movie
     if movie.cast_ids:
-        db_movie.cast = db.query(models.Actor).filter(models.Actor.id.in_(movie.cast_ids)).all()
+        actors = db.query(models.Actor).filter(models.Actor.id.in_(movie.cast_ids)).all()
+        if len(actors) != len(movie.cast_ids):
+            raise HTTPException(status_code=400, detail="Some actor IDs are invalid")
+        db_movie.cast = actors
     
     db.add(db_movie)
     db.commit()
     db.refresh(db_movie)
     return db_movie
+
 
 def get_movie_by_id(db: Session, movie_id: int) -> Optional[models.Movie]:
     return db.query(models.Movie).filter(models.Movie.id == movie_id).first()
@@ -115,13 +119,6 @@ def delete_movie(db: Session, movie_id: int):
         db.delete(db_movie)
         db.commit()
 
-def delete_movie(db: Session, movie_id: int, user_id: int):
-    db_movie = db.query(models.Movie).filter(models.Movie.id == movie_id, models.Movie.owner_id == user_id).first()
-    if db_movie:
-        db.delete(db_movie)
-        db.commit()
-    return db_movie
-
 # Rating CRUD Operations
 
 def create_rating(db: Session, rating: schemas.RatingCreate) -> models.Rating:
@@ -132,8 +129,8 @@ def create_rating(db: Session, rating: schemas.RatingCreate) -> models.Rating:
     db.refresh(db_rating)
     return db_rating
 
-def get_rating(db: Session, movie_id: int) -> Optional[models.Rating]:
-    return db.query(models.Rating).filter(models.Rating.id == movie_id).first()
+def get_rating(db: Session, rating_id: int) -> Optional[models.Rating]:
+    return db.query(models.Rating).filter(models.Rating.id == rating_id).first()
 
 def get_ratings_for_movie(db: Session, movie_id: int):
     return db.query(models.Rating).filter(models.Rating.movie_id == movie_id).all()
@@ -152,7 +149,7 @@ def delete_rating(db: Session, rating_id: int):
 def create_user(db: Session, user: schemas.UserCreate, hashed_password: str) -> models.User:
     db_user = models.User(username=user.username, 
                           email=user.email, 
-                          hashed_password=hashed_password)
+                          password_hash=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

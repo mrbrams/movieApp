@@ -1,131 +1,99 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from fastapi import FastAPI
+from .main import app  # Adjust the import based on your project structure
+from .database import Base, get_db
+from .models import Genre, Actor, Director, Movie, Rating, User, Comment
+from .schemas import GenreCreate, ActorCreate, DirectorCreate, MovieCreate, RatingCreate, UserCreate, CommentCreate
 
-from .main import app, get_db
-from . import models, schemas
-from .database import Base
+# Define your test database URL
+DATABASE_URL = "postgresql+asyncpg://postgres:1010@localhost/test_movie_database"
 
-# Use an in-memory SQLite database for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+# Create a test database engine and session
+engine = create_async_engine(DATABASE_URL, echo=True)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=AsyncSession)
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Dependency override for test
+async def override_get_db():
+    async with TestingSessionLocal() as session:
+        yield session
 
-# Create a new database session for each test
+app.dependency_overrides[get_db] = override_get_db
+
 @pytest.fixture(scope="module")
-def db_session():
-    Base.metadata.create_all(bind=engine)  # Create the database tables
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-        Base.metadata.drop_all(bind=engine)  # Drop the database tables after tests
+async def setup_database():
+    async with engine.begin() as conn:
+        # Drop all tables and create them anew
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
-# Override the get_db dependency to use the testing session
-@pytest.fixture(scope="module")
-def client(db_session):
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            db_session.close()
+    yield
 
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
+    # Teardown
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
-# Test user creation
-def test_create_user(client):
-    response = client.post(
-        "/users/",
-        json={"username": "testuser", "email": "test@example.com", "password": "password123"},
-    )
+@pytest.mark.asyncio
+async def test_create_genre(setup_database):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.post("/genres/", json={"name": "Action"})
     assert response.status_code == 200
-    data = response.json()
-    assert data["username"] == "testuser"
-    assert "id" in data
+    assert response.json() == {"id": 1, "name": "Action"}
 
-# Test token creation (login)
-def test_login(client):
-    response = client.post(
-        "/token",
-        data={"username": "testuser", "password": "password123"},
-    )
+@pytest.mark.asyncio
+async def test_create_actor(setup_database):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.post("/actors/", json={"name": "John Doe", "date_of_birth": "1980-01-01", "bio": "An actor"})
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
+    assert response.json() == {"id": 1, "name": "John Doe", "date_of_birth": "1980-01-01", "bio": "An actor"}
 
-# Test movie creation
-def test_create_movie(client):
-    # First, log in to get a token
-    login_response = client.post(
-        "/token",
-        data={"username": "testuser", "password": "password123"},
-    )
-    token = login_response.json()["access_token"]
-
-    # Then, create a new movie
-    response = client.post(
-        "/movies/",
-        json={"title": "Inception", "description": "A mind-bending thriller", "cast_ids": []},
-        headers={"Authorization": f"Bearer {token}"},
-    )
+@pytest.mark.asyncio
+async def test_create_director(setup_database):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.post("/directors/", json={"name": "Jane Smith", "date_of_birth": "1975-05-01", "bio": "A director"})
     assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Inception"
-    assert data["description"] == "A mind-bending thriller"
+    assert response.json() == {"id": 1, "name": "Jane Smith", "date_of_birth": "1975-05-01", "bio": "A director"}
 
-# Test reading a movie
-def test_read_movie(client):
-    response = client.get("/movies/1")
+@pytest.mark.asyncio
+async def test_create_movie(setup_database):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        # Make sure to have valid genre_id and director_id if necessary
+        response = await client.post("/movies/", json={
+            "title": "Epic Movie",
+            "description": "An epic movie",
+            "release_date": "2024-01-01",
+            "duration": 120,
+            "rating": 8.5,
+            "genre_ids": [1],
+            "director_id": 1,
+            "cast_ids": [1],
+            "language": "English",
+            "trailer_url": "http://example.com/trailer"
+        })
     assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Inception"
-    assert data["description"] == "A mind-bending thriller"
+    assert response.json()["title"] == "Epic Movie"
 
-# Test updating a movie
-def test_update_movie(client):
-    # First, log in to get a token
-    login_response = client.post(
-        "/token",
-        data={"username": "testuser", "password": "password123"},
-    )
-    token = login_response.json()["access_token"]
-
-    # Then, update the movie
-    response = client.put(
-        "/movies/1",
-        json={"title": "Inception Updated", "description": "Updated description", "cast_ids": []},
-        headers={"Authorization": f"Bearer {token}"},
-    )
+@pytest.mark.asyncio
+async def test_create_user(setup_database):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.post("/users/", json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "password": "password123"
+        })
     assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Inception Updated"
-    assert data["description"] == "Updated description"
+    assert response.json()["username"] == "testuser"
 
-# Test deleting a movie
-def test_delete_movie(client):
-    # First, log in to get a token
-    login_response = client.post(
-        "/token",
-        data={"username": "testuser", "password": "password123"},
-    )
-    token = login_response.json()["access_token"]
-
-    # Then, delete the movie
-    response = client.delete(
-        "/movies/1",
-        headers={"Authorization": f"Bearer {token}"},
-    )
+@pytest.mark.asyncio
+async def test_create_comment(setup_database):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        # Make sure to have valid movie_id and user_id if necessary
+        response = await client.post("/comments/", json={
+            "content": "Great movie!",
+            "movie_id": 1,
+            "user_id": 1
+        })
     assert response.status_code == 200
-
-    # Verify that the movie is deleted
-    response = client.get("/movies/1")
-    assert response.status_code == 404
+    assert response.json()["content"] == "Great movie!"

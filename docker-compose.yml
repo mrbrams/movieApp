@@ -24,3 +24,5 @@ services:
     env_file: .env
     depends_on:
       - api_db
+
+      

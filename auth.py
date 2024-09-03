@@ -49,7 +49,7 @@ def authenticate_user(db: Session, username: str, password: str):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user:
         return False
-    if not verify_password(password, user.password):
+    if not verify_password(password, user.password_hash):  
         return False
     return user
 
@@ -59,10 +59,15 @@ def verify_access_token(token: str):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise JWTError()
+            raise JWTError("Could not validate credentials")
         return username
     except JWTError:
-        raise JWTError("Could not validate credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 
 # Dependency to get the current user from the token
 def get_current_user(db: Session = Depends(database.get_db), token: str = Depends(oauth2_scheme)):

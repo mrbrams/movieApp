@@ -1,28 +1,41 @@
-# from fastapi import FastAPI, Depends, HTTPException, status
-# from sqlalchemy.orm import Session
-# from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-
-# import models, schemas, crud, auth, database
-# from database import engine, SessionLocal
-
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from auth import get_password_hash, verify_password, create_access_token, authenticate_user, verify_access_token, get_current_user, get_current_active_user
-import crud as crud, schemas as schemas, models as models
-from database import engine, Base, get_db
-from auth import pwd_context
-from typing import Optional
+from pydantic import BaseModel
+from auth import (
+    get_password_hash, verify_password, create_access_token, authenticate_user,
+    verify_access_token, get_current_user, get_current_active_user, pwd_context
+)
+import crud
+import schemas
+import models
+from database import engine, Base, SessionLocal, get_db
+from models import Base
 from logger import get_logger
 
 logger = get_logger(__name__)
-
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
 # Initialize the FastAPI app
 app = FastAPI()
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/token", response_model=Token)
+def login(form_data: TokenRequest, db: Session = Depends(get_db)):
+    user = authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 # Dependency to get the database session
 def get_db():
@@ -35,48 +48,26 @@ def get_db():
 # OAuth2PasswordBearer creates a login endpoint automatically at /token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Verify user credentials and return a user
-def authenticate_user(db: Session, username: str, password: str):
-    user = crud.get_user_by_username(db, username=username)
-    if not user:
-        return False
-    if not auth.verify_password(password, user.hashed_password):
-        return False
-    return user
-
 # Endpoint to register a new user
-
-# @app.post("/users/", response_model=schemas.User)
-# def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-#     db_user = crud.get_user_by_username(db, username=user.username)
-#     if db_user:
-#         raise HTTPException(status_code=400, detail="Username already registered")
-#     return crud.create_user(db, user)
-
-# def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-#     db_user = crud.get_user_by_email(db, email=user.email)
-#     if db_user:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-    
-#     db_user = crud.get_user_by_username(db, username=user.username)
-#     if db_user:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
-    
-#     new_user = crud.create_user(db=db, user=user)
-#     return new_user
-
-
-
 @app.post("/signup", response_model=schemas.User)
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
     logger.info('Creating user...')
     db_user = crud.get_user_by_username(db, username=user.username)
     hashed_password = pwd_context.hash(user.password)
     if db_user:
-        logger.warning(f"User with {user.username} already exists.")
+        logger.warning(f"User with username {user.username} already exists.")
         raise HTTPException(status_code=400, detail="Username already registered")
     logger.info('User successfully created.')
     return crud.create_user(db=db, user=user, hashed_password=hashed_password)
+
+# Verify user credentials and return a user
+# def authenticate_user(db: Session, username: str, password: str):
+#     user = crud.get_user_by_username(db, username=username)
+#     if not user:
+#         return False
+#     if not auth.verify_password(password, user.hashed_password):
+#         return False
+#     return user
 
 # Endpoint to get current logged-in user
 @app.get("/users/me/", response_model=schemas.User)
@@ -86,40 +77,37 @@ def read_users_me(current_user: schemas.User = Depends(get_current_active_user))
 # Endpoint to obtain a token
 @app.post("/login", response_model=schemas.Token)
 def login_for_access_token(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
-    user = auth.authenticate_user(db, form_data.username, form_data.password)
+    user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = auth.create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 # Endpoint to create a movie
 @app.post("/movies/", response_model=schemas.Movie)
 def create_movie(movie: schemas.MovieCreate, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_active_user)):
-    return crud.create_movie(db=db, movie=movie)
+    return crud.create_movie(db=db, movie=movie, user_id=current_user.id)
+
 
 # Endpoint to get a list of movies
 @app.get("/movies/", response_model=list[schemas.Movie])
 def read_movies(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    movies = crud.get_movies(db, skip=skip, limit=limit)
-    return movies
+    return crud.get_movies(db, skip=skip, limit=limit)
 
 # Endpoint to get a specific movie added by ID (public access)
 @app.get("/movies/{movie_id}", response_model=schemas.Movie)
 def read_movie(movie_id: int, db: Session = Depends(get_db)):
-    db_movie = crud.get_movie(db, movie_id=movie_id)
+    db_movie = crud.get_movie_by_id(db, movie_id=movie_id)
     if db_movie is None:
         raise HTTPException(status_code=404, detail="Movie not found")
     return db_movie
 
 # Endpoint to update a movie
-# @app.put("/movies/{movie_id}", response_model=schemas.Movie)
-# def update_movie(movie_id: int, movie: schemas.MovieUpdate, db: Session = Depends(get_db), current_user: schemas.User = Depends(auth.get_current_active_user)):
-#     return crud.update_movie(db=db, movie_id=movie_id, movie=movie)
-
 @app.put("/movies/{movie_id}", response_model=schemas.Movie)
 def update_movie(movie_id: int, movie: schemas.MovieCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_movie = crud.get_movie_by_id(db, movie_id=movie_id)
@@ -132,9 +120,9 @@ def update_movie(movie_id: int, movie: schemas.MovieCreate, db: Session = Depend
     return crud.update_movie(db=db, movie=movie, movie_id=movie_id, user_id=current_user.id)
 
 # Endpoint to delete a movie
-@app.delete("/movies/{movie_id}", response_model=schemas.Movie)
-def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_active_user)):
-    return crud.delete_movie(db=db, movie_id=movie_id)
+# @app.delete("/movies/{movie_id}", response_model=schemas.Movie)
+# def delete_movie(movie_id: int, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_active_user)):
+#     return crud.delete_movie(db=db, movie_id=movie_id)
 
 #Endpoint to delete a movie only by a user who listed it
 @app.delete("/movies/{movie_id}", response_model=schemas.Movie)
@@ -201,3 +189,4 @@ def add_nested_comment(comment_id: int, comment: schemas.CommentCreate, db: Sess
     comment.parent_id = comment_id
     comment.movie_id = db_comment.movie_id  # Ensure the movie ID is inherited
     return crud.create_comment(db=db, comment=comment, user_id=current_user.id)
+
