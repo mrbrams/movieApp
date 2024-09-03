@@ -3,10 +3,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI
-from .main import app  # Adjust the import based on your project structure
-from .database import Base, get_db
-from .models import Genre, Actor, Director, Movie, Rating, User, Comment
-from .schemas import GenreCreate, ActorCreate, DirectorCreate, MovieCreate, RatingCreate, UserCreate, CommentCreate
+from .app.main import app  # Adjust the import based on your project structure
+from .app.database import Base, get_db
+from .app.models import Genre, Actor, Director, Movie, Rating, User, Comment
+from .app.schemas import GenreCreate, ActorCreate, DirectorCreate, MovieCreate, RatingCreate, UserCreate, CommentCreate
 
 # Define your test database URL
 DATABASE_URL = "postgresql+asyncpg://postgres:1010@localhost/test_movie_database"

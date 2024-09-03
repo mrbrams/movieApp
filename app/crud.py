@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
-import models, schemas
+import app.models as models, app.schemas as schemas
 from fastapi import FastAPI, HTTPException, Depends
 
 # Genre CRUD Operations

@@ -2,15 +2,15 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from auth import (
+from app.auth import (
     get_password_hash, verify_password, create_access_token, authenticate_user,
     verify_access_token, get_current_user, get_current_active_user, pwd_context
 )
-import crud
-import schemas
-import models
-from database import engine, Base, SessionLocal, get_db
-from models import Base
+import app.crud as crud
+import app.schemas as schemas
+import app.models as models
+from app.database import engine, Base, SessionLocal, get_db
+from app.models import Base
 from logger import get_logger
 
 logger = get_logger(__name__)
