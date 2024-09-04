@@ -190,3 +190,9 @@ def add_nested_comment(comment_id: int, comment: schemas.CommentCreate, db: Sess
     comment.movie_id = db_comment.movie_id  # Ensure the movie ID is inherited
     return crud.create_comment(db=db, comment=comment, user_id=current_user.id)
 
+
+# Start Uvicorn server if this script is run directly
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
+
