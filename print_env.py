@@ -14,3 +14,5 @@ print(f"DATABASE_URL: {database_url}")
 print(f"SECRET_KEY: {secret_key}")
 print(f"ALGORITHM: {algorithm}")
 print(f"ACCESS_TOKEN_EXPIRE_MINUTES: {access_token_expire_minutes}")
+# Print out the DATABASE_URL environment variable
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")

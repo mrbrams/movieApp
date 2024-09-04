@@ -12,6 +12,10 @@ import app.models as models
 from app.database import engine, Base, SessionLocal, get_db
 from app.models import Base
 from logger import get_logger
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = get_logger(__name__)
 
