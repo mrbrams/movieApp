@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -12,12 +13,34 @@ from app.database import SessionLocal, get_db
 
 import app.models as models, app.schemas as schemas, app.database as database
 
+# Load environment variables from .env file
 load_dotenv()
 
-# Secret key used for encoding JWT tokens
-SECRET_KEY = os.environ.get('SECRET_KEY') 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Retrieve environment variables with logging
+SECRET_KEY = os.environ.get('SECRET_KEY')
 ALGORITHM = os.environ.get('ALGORITHM')
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES'))
+ACCESS_TOKEN_EXPIRE_MINUTES = os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES')
+
+# Debug output
+logger.debug(f"SECRET_KEY: {SECRET_KEY}")
+logger.debug(f"ALGORITHM: {ALGORITHM}")
+logger.debug(f"ACCESS_TOKEN_EXPIRE_MINUTES: {ACCESS_TOKEN_EXPIRE_MINUTES}")
+
+if SECRET_KEY is None:
+    raise ValueError("SECRET_KEY environment variable is not set.")
+if ALGORITHM is None:
+    raise ValueError("ALGORITHM environment variable is not set.")
+if ACCESS_TOKEN_EXPIRE_MINUTES is None:
+    raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES environment variable is not set.")
+
+try:
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(ACCESS_TOKEN_EXPIRE_MINUTES)
+except ValueError:
+    raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be an integer.")
 
 # Password hashing configuration
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -67,7 +90,6 @@ def verify_access_token(token: str):
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
 
 # Dependency to get the current user from the token
 def get_current_user(db: Session = Depends(database.get_db), token: str = Depends(oauth2_scheme)):
