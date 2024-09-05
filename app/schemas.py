@@ -21,7 +21,7 @@ class Genre(GenreBase):
     id: int = Field(..., description="Unique identifier for the genre")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Actor Schema
 class ActorBase(BaseModel):
@@ -37,7 +37,7 @@ class Actor(ActorBase):
     movies: List[int] = Field(default=[], description="List of movie IDs the actor has appeared in")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Director Schema
 class DirectorBase(BaseModel):
@@ -53,7 +53,7 @@ class Director(DirectorBase):
     movies: List[int] = Field(default=[], description="List of movie IDs directed by the director")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Movie Schema
 class MovieBase(BaseModel):
@@ -80,7 +80,7 @@ class Movie(MovieBase):
     updated_at: datetime = Field(..., description="Timestamp when the movie was last updated")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Rating Schema
 class RatingBase(BaseModel):
@@ -95,7 +95,7 @@ class Rating(RatingBase):
     user_id: int = Field(..., description="ID of the user who gave the rating")
 
     class Config:
-        orm_mode = True
+       from_attributes = True
 
 # User Schema
 class UserBase(BaseModel):
@@ -112,7 +112,7 @@ class User(UserBase):
     comments: List[int] = Field(default=[], description="List of comment IDs made by the user")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class Token(BaseModel):
@@ -141,6 +141,6 @@ class Comment(CommentBase):
     replies: List["Comment"] = Field(default=[], description="List of replies to this comment")
 
     class Config:
-        orm_mode = True
+       from_attributes = True
 
 Comment.update_forward_refs()
